@@ -1,0 +1,17 @@
+{
+  "name": "nfl-quartus-silva",
+  "version": "1.0.0",
+  "description": "Can I find discrepancies between Draftkings' moneylines for every game of the regular season and their main/alt win totals?",
+  "main": "index.js",
+  "scripts": {
+    "b": "tsc",
+    "e": "node build/index.js",
+    "be": "tsc && node build/index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^20.4.10",
+    "typescript": "^5.1.6"
+  }
+}
