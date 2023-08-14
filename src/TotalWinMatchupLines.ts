@@ -1,4 +1,5 @@
 import { readFileSync } from 'fs';
+import { Result } from './SeasonSim';
 
 export interface TotalWinMatchupLine {
   team1: string;
@@ -55,7 +56,7 @@ enum TotalWinMatchupOption {
   TEAM_2 = 2,
 }
 
-interface TotalWinMatchupResult {
+interface TotalWinMatchupResult extends Result<TotalWinMatchupLine> {
   line: TotalWinMatchupLine;
   teamChoice: TotalWinMatchupOption;
 

@@ -1,4 +1,5 @@
 import { readFileSync } from 'fs';
+import { Result } from './SeasonSim';
 
 enum LineType {
   OVER = 'OVER',
@@ -8,6 +9,7 @@ enum LineType {
 export interface TotalWinLine {
   team: string;
   type: LineType;
+  main: boolean;
   line: number;
   oddsAmerican: number;
   oddsDecimal: number;
@@ -33,9 +35,11 @@ export function parseTotalWinLines(): TotalWinLine[] {
       const oddsAmerican: number = parseInt(outcome['oddsAmerican']);
       const oddsDecimal: number = parseFloat(outcome['oddsDecimal']);
       const impliedProb: number = 1 / oddsDecimal;
+      const main = outcome['main'];
       outputLines.push({
         team,
         type,
+        main,
         line,
         oddsAmerican,
         oddsDecimal,
@@ -47,7 +51,7 @@ export function parseTotalWinLines(): TotalWinLine[] {
   return outputLines;
 }
 
-interface TotalWinResult {
+interface TotalWinResult extends Result<TotalWinLine> {
   line: TotalWinLine;
   n: number;
   successes: number;
@@ -122,3 +126,45 @@ export function totalWinResultToString(result: TotalWinResult): string {
     result.ev,
   ].join(',');
 }
+
+/* export function findBestResultPerTeam(results: TotalWinResult[]): { [key: string]: TotalWinResult } {
+  let outDict: { [key: string]: TotalWinResult } = {};
+  results.forEach((result) => {
+    if (!(result.line.team in outDict) || outDict[result.line.team].ev < result.ev) outDict[result.line.team] = result;
+  });
+  return outDict;
+}
+
+export function simulateBets(
+  bankroll: number,
+  bets: { [key: string]: TotalWinResult },
+  seasonResults: { [key: string]: number[] }
+): [{ teamName: string; line: TotalWinLine; betSize: number }[], number[]] {
+  let totalEv = 0;
+  Object.keys(bets).forEach((teamName) => {
+    totalEv += bets[teamName].ev;
+  });
+  let betAmounts: { teamName: string; line: TotalWinLine; betSize: number }[] = [];
+  Object.keys(bets).forEach((teamName) => {
+    betAmounts.push({
+      teamName,
+      line: bets[teamName].line,
+      betSize: (bankroll * bets[teamName].ev) / totalEv,
+    });
+  });
+
+  const teamNames = Object.keys(seasonResults);
+  let bankResults: number[] = [];
+  for (let i = 0; i < seasonResults[teamNames[0]].length; i++) {
+    let bank = 0;
+    betAmounts.forEach((bet) => {
+      const winCount = seasonResults[bet.teamName][i];
+      if (winCount == bet.line.line) bank += bet.betSize;
+      if (bet.line.type == LineType.OVER && winCount > bet.line.line) bank += bet.betSize * bet.line.oddsDecimal;
+      if (bet.line.type == LineType.UNDER && winCount < bet.line.line) bank += bet.betSize * bet.line.oddsDecimal;
+    });
+    bankResults.push(bank);
+  }
+
+  return [betAmounts, bankResults];
+} */

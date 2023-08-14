@@ -1,4 +1,5 @@
 import { readFileSync } from 'fs';
+import { Result } from './SeasonSim';
 
 export interface ExactWinLine {
   team: string | undefined;
@@ -52,7 +53,7 @@ export function parseExactWinLines(): ExactWinLine[] {
   return outputLines;
 }
 
-interface ExactWinResult {
+interface ExactWinResult extends Result<ExactWinLine> {
   line: ExactWinLine;
   n: number;
   successes: number;
