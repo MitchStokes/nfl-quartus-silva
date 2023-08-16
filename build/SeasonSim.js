@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getEvolvedOddsForTeamInWeekN = exports.simulateSeasonWithEvolvingOddsNTimes = exports.simulateSeasonWithEvolvingOdds = exports.simulateSeasonNTimes = exports.simulateSeason = exports.parseGameLines = void 0;
+exports.getChanceOfWinTotalPerTeam = exports.getEvolvedOddsForTeamInWeekN = exports.simulateSeasonWithEvolvingOddsNTimes = exports.simulateSeasonWithEvolvingOdds = exports.simulateSeasonNTimes = exports.simulateSeason = exports.parseGameLines = void 0;
 const fs_1 = require("fs");
 function parseGameLines() {
     const content = (0, fs_1.readFileSync)('./res/gameLines.json', 'utf8');
@@ -50,8 +50,6 @@ function simulateSeason(gameLines) {
         if (!(game.team2 in out))
             out[game.team2] = 0;
         let team1WinProb = game.team1AdjustedProb;
-        const k = 0.01; // Additional win probability percentage added/removed per win difference
-        team1WinProb += Math.max(0, Math.min(1.0, k * (out[game.team1] - out[game.team2])));
         const winner = random <= team1WinProb ? game.team1 : game.team2;
         out[winner] += 1;
     });
@@ -148,3 +146,56 @@ function getEvolvedOddsForTeamInWeekN(simResults, teamName, weekNum) {
     return out;
 }
 exports.getEvolvedOddsForTeamInWeekN = getEvolvedOddsForTeamInWeekN;
+function generateEveryWinLossCombo() {
+    let out = [];
+    for (let i = 0; i <= 131071; i++) {
+        out.push(i);
+    }
+    return out;
+}
+// 0 based
+function didWinIthGame(winLoss, i) {
+    return (winLoss >> i) % 2 == 1;
+}
+function getNumberOfWinsInCombo(winLoss) {
+    let wins = 0;
+    for (let i = 0; i < 17; i++) {
+        wins += didWinIthGame(winLoss, i) ? 1 : 0;
+    }
+    return wins;
+}
+function getChanceOfWinTotalPerTeam(gameLines) {
+    function getAdjustedOdds(winOdds, lossOdds) {
+        return {
+            win: (winOdds + lossOdds) / lossOdds,
+            loss: (winOdds + lossOdds) / winOdds,
+        };
+    }
+    let allTeamNames = [];
+    gameLines.forEach((game) => {
+        if (!allTeamNames.includes(game.team1))
+            allTeamNames.push(game.team1);
+        if (!allTeamNames.includes(game.team2))
+            allTeamNames.push(game.team2);
+    });
+    const allCombos = generateEveryWinLossCombo();
+    let out = {};
+    allTeamNames.forEach((teamName) => {
+        out[teamName] = {};
+        const relevantGames = gameLines.filter((game) => game.team1 == teamName || game.team2 == teamName);
+        allCombos.forEach((combo) => {
+            const winCount = getNumberOfWinsInCombo(combo);
+            let implOdds = 1;
+            for (let i = 0; i < 17; i++) {
+                const winOdds = relevantGames[i].team1 == teamName ? relevantGames[i].team1OddsDecimal : relevantGames[i].team2OddsDecimal;
+                const lossOdds = relevantGames[i].team1 == teamName ? relevantGames[i].team2OddsDecimal : relevantGames[i].team1OddsDecimal;
+                implOdds *= didWinIthGame(combo, i)
+                    ? getAdjustedOdds(winOdds, lossOdds).win
+                    : getAdjustedOdds(winOdds, lossOdds).loss;
+            }
+            out[teamName][winCount] = (out[teamName][winCount] || 0) + 1 / implOdds;
+        });
+    });
+    return out;
+}
+exports.getChanceOfWinTotalPerTeam = getChanceOfWinTotalPerTeam;

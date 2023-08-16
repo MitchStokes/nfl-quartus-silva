@@ -69,9 +69,6 @@ export function simulateSeason(gameLines: GameLine[]): { [key: string]: number }
     if (!(game.team2 in out)) out[game.team2] = 0;
 
     let team1WinProb = game.team1AdjustedProb;
-    const k = 0.01; // Additional win probability percentage added/removed per win difference
-    team1WinProb += Math.max(0, Math.min(1.0, k * (out[game.team1] - out[game.team2])));
-
     const winner = random <= team1WinProb ? game.team1 : game.team2;
     out[winner] += 1;
   });
@@ -199,5 +196,64 @@ export function getEvolvedOddsForTeamInWeekN(
     const weekOdds = teamResult.evolvedOdds[weekNum];
     out.push(weekOdds);
   });
+  return out;
+}
+
+function generateEveryWinLossCombo(): number[] {
+  let out: number[] = [];
+  for (let i = 0; i <= 131071; i++) {
+    out.push(i);
+  }
+  return out;
+}
+
+// 0 based
+function didWinIthGame(winLoss: number, i: number): boolean {
+  return (winLoss >> i) % 2 == 1;
+}
+
+function getNumberOfWinsInCombo(winLoss: number): number {
+  let wins = 0;
+  for (let i = 0; i < 17; i++) {
+    wins += didWinIthGame(winLoss, i) ? 1 : 0;
+  }
+  return wins;
+}
+
+export function getChanceOfWinTotalPerTeam(gameLines: GameLine[]): { [key: string]: { [key: number]: number } } {
+  function getAdjustedOdds(winOdds: number, lossOdds: number) {
+    return {
+      win: (winOdds + lossOdds) / lossOdds,
+      loss: (winOdds + lossOdds) / winOdds,
+    };
+  }
+
+  let allTeamNames: string[] = [];
+  gameLines.forEach((game) => {
+    if (!allTeamNames.includes(game.team1)) allTeamNames.push(game.team1);
+    if (!allTeamNames.includes(game.team2)) allTeamNames.push(game.team2);
+  });
+
+  const allCombos = generateEveryWinLossCombo();
+  let out: { [key: string]: { [key: number]: number } } = {};
+  allTeamNames.forEach((teamName) => {
+    out[teamName] = {};
+    const relevantGames = gameLines.filter((game) => game.team1 == teamName || game.team2 == teamName);
+    allCombos.forEach((combo) => {
+      const winCount = getNumberOfWinsInCombo(combo);
+      let implOdds = 1;
+      for (let i = 0; i < 17; i++) {
+        const winOdds =
+          relevantGames[i].team1 == teamName ? relevantGames[i].team1OddsDecimal : relevantGames[i].team2OddsDecimal;
+        const lossOdds =
+          relevantGames[i].team1 == teamName ? relevantGames[i].team2OddsDecimal : relevantGames[i].team1OddsDecimal;
+        implOdds *= didWinIthGame(combo, i)
+          ? getAdjustedOdds(winOdds, lossOdds).win
+          : getAdjustedOdds(winOdds, lossOdds).loss;
+      }
+      out[teamName][winCount] = (out[teamName][winCount] || 0) + 1 / implOdds;
+    });
+  });
+
   return out;
 }

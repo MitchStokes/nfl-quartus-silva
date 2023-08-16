@@ -58,9 +58,9 @@ export function findWorstCaseParlayOddsForTeam(teamName: string, oddsBounds: Tea
     let parlayValue = 1;
     oddsBounds[teamName].forEach((week, idx) => {
       if (didWinIthGame(winLossCombo, idx)) {
-        parlayValue *= week.lowerBound;
+        parlayValue *= week.upperBound;
       } else {
-        parlayValue *= 1 / (1 - 1 / week.upperBound);
+        parlayValue *= 1 / (1 - 1 / week.lowerBound);
       }
     });
     out[winLossCombo] = parlayValue;

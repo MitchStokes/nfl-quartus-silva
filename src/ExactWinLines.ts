@@ -1,117 +1,128 @@
-import { readFileSync } from 'fs';
-import { Result } from './SeasonSim';
+// Finds the best lines between Fanduel and DraftKings exact win lines
 
-export interface ExactWinLine {
-  team: string | undefined;
-  eventId: string;
-  line: number;
-  oddsAmerican: number;
-  oddsDecimal: number;
-  impliedProb: number;
+import { DKExactWinLine } from './DKExactWinLines';
+import { FanduelExactWinLine } from './FanduelExactWinLines';
+import { SeasonSimulationN } from './SeasonSim';
+
+export enum Sportsbook {
+  DK = 'DraftKings',
+  FANDUEL = 'FanDuel',
 }
 
-export function parseExactWinLines(): ExactWinLine[] {
-  const content = readFileSync('./res/exactWinLines.json', 'utf8');
-  const root = JSON.parse(content);
-  const teamsArray =
-    root['eventGroup']['offerCategories'][2]['offerSubcategoryDescriptors'][1]['offerSubcategory']['offers'];
-  let outputLines: ExactWinLine[] = [];
+export interface BestExactWinLine {
+  team: string;
+  line: number;
+  decimalOdds: number;
+  impliedProb: number;
+  sportsbook: Sportsbook;
+}
 
-  teamsArray.forEach((entry: any) => {
-    const object = entry[0];
-    const eventId = object['eventId'];
+export function compileBestExactWinLines(
+  dkLines: DKExactWinLine[],
+  fanduelLines: FanduelExactWinLine[]
+): BestExactWinLine[] {
+  let out: BestExactWinLine[] = [];
 
-    const outcomes = object['outcomes'];
-    outcomes.forEach((outcome: any) => {
-      const line: number = parseInt(outcome['label']);
-      const oddsAmerican: number = parseInt(outcome['oddsAmerican']);
-      const oddsDecimal: number = parseFloat(outcome['oddsDecimal']);
-      const impliedProb: number = 1 / oddsDecimal;
-      outputLines.push({
-        team: undefined,
-        eventId,
-        line,
-        oddsAmerican,
-        oddsDecimal,
-        impliedProb,
+  dkLines.forEach((dkLine) => {
+    const fanduelLine = fanduelLines.filter((fdLine) => dkLine.team == fdLine.team && dkLine.line == fdLine.line)[0];
+    if (!fanduelLine || dkLine.oddsDecimal >= fanduelLine.decimalOdds) {
+      out.push({
+        team: dkLine.team as string,
+        line: dkLine.line,
+        decimalOdds: dkLine.oddsDecimal,
+        impliedProb: 1 / dkLine.oddsDecimal,
+        sportsbook: Sportsbook.DK,
       });
-    });
-
-    const eventsArray = root['eventGroup']['events'];
-    let eventIdToTeamMap: { [key: string]: string } = {};
-    eventsArray.forEach((event: any) => {
-      const eventId = event['eventId'];
-      const teamName = event['name'].split(' 2023/24')[0];
-      eventIdToTeamMap[eventId] = teamName;
-    });
-
-    outputLines.forEach((outputLine) => {
-      outputLine.team = eventIdToTeamMap[outputLine.eventId];
-    });
+    } else {
+      out.push({
+        team: fanduelLine.team,
+        line: fanduelLine.line,
+        decimalOdds: fanduelLine.decimalOdds,
+        impliedProb: 1 / fanduelLine.decimalOdds,
+        sportsbook: Sportsbook.FANDUEL,
+      });
+    }
   });
 
-  return outputLines;
+  return out;
 }
 
-interface ExactWinResult extends Result<ExactWinLine> {
-  line: ExactWinLine;
-  n: number;
-  successes: number;
-  fails: number;
-
-  successRate: number;
-  failRate: number;
-
+export interface ExactWinAnalysis {
+  team: string;
+  winTotal: number;
+  decimalOdds: number;
+  impliedProb: number;
+  sportsbook: Sportsbook;
+  realProb: number;
   ev: number;
 }
 
-export function testExactWinLines(lines: ExactWinLine[], seasonResults: { [key: string]: number[] }): ExactWinResult[] {
-  let outputResults: ExactWinResult[] = [];
-
-  lines.forEach((line) => {
-    if (!line.team) return;
-
-    const n = seasonResults[line.team].length;
-    let successes = 0;
-    let fails = 0;
-    seasonResults[line.team].forEach((winCount) => {
-      successes += winCount == line.line ? 1 : 0;
-      fails += winCount != line.line ? 1 : 0;
-    });
-
-    const successRate = successes / n;
-    const failRate = fails / n;
-    const ev = successRate * (line.oddsDecimal - 1) - failRate;
-
-    outputResults.push({
-      line,
-      n,
-      successes,
-      fails,
-      successRate,
-      failRate,
-      ev,
+export function getExactWinAnalyses(
+  realChances: { [key: string]: { [key: number]: number } },
+  exactWinLines: BestExactWinLine[]
+): ExactWinAnalysis[] {
+  let out: ExactWinAnalysis[] = [];
+  Object.keys(realChances).forEach((team) => {
+    Object.keys(realChances[team]).forEach((wins) => {
+      const winTotal = parseInt(wins);
+      const exactWinLine: BestExactWinLine = exactWinLines.filter(
+        (line) => line.team == team && line.line == winTotal
+      )[0];
+      const decimalOdds = exactWinLine.decimalOdds;
+      const impliedProb = exactWinLine.impliedProb;
+      const realProb = realChances[team][winTotal];
+      const ev = realProb * (decimalOdds - 1) - (1 - realProb);
+      out.push({
+        team,
+        winTotal,
+        decimalOdds,
+        impliedProb,
+        sportsbook: exactWinLine.sportsbook,
+        realProb,
+        ev,
+      });
     });
   });
-
-  return outputResults;
+  return out;
 }
 
-export function exactWinResultToString(result: ExactWinResult): string {
-  return [
-    result.line.team,
-    'EXACT',
-    result.line.line,
-    result.line.oddsAmerican,
-    result.line.oddsDecimal,
-    result.line.impliedProb,
-    result.n,
-    result.successes,
-    result.fails,
-    0,
-    result.successRate,
-    result.failRate,
-    0,
-    result.ev,
-  ].join(',');
+export function exactWinAnalysesToCsv(analyses: ExactWinAnalysis[]): string {
+  let out: string = '';
+  analyses.forEach((analysis) => {
+    out +=
+      [
+        analysis.team,
+        analysis.winTotal,
+        analysis.decimalOdds,
+        analysis.impliedProb,
+        analysis.sportsbook,
+        analysis.realProb,
+        analysis.ev,
+      ].join(',') + '\n';
+  });
+  return out;
+}
+
+export function calculateBettingResult(
+  seasonSims: SeasonSimulationN,
+  bets: ExactWinAnalysis[],
+  bankroll: number
+): number[] {
+  let totalEv = 0;
+  bets.forEach((bet) => (totalEv += bet.ev));
+  let betAmounts: { bet: ExactWinAnalysis; amount: number }[] = [];
+  bets.forEach((bet) => betAmounts.push({ bet, amount: (bet.ev * bankroll) / totalEv }));
+
+  let results: number[] = [];
+  let simCount = seasonSims[Object.keys(seasonSims)[0]].length;
+  for (let simNum = 0; simNum < simCount; simNum++) {
+    let bank = 0;
+    let odds: number[] = [];
+    betAmounts.forEach((bet) => {
+      if (seasonSims[bet.bet.team][simNum] == bet.bet.winTotal) bank += bet.amount * bet.bet.decimalOdds;
+    });
+    results.push(bank);
+  }
+
+  return results;
 }
