@@ -86,19 +86,35 @@ export function getExactWinAnalyses(
   return out;
 }
 
-export function exactWinAnalysesToCsv(analyses: ExactWinAnalysis[]): string {
+export function exactWinAnalysesToCsv(analyses: ExactWinAnalysis[], bankroll: number): string {
+  let betAmounts: { bet: ExactWinAnalysis; amount: number }[] = [];
+  betAmounts.push({ bet: analyses[0], amount: 5 });
+  for (let i = 1; i < analyses.length; i++) {
+    betAmounts.push({
+      bet: analyses[i],
+      amount:
+        ((betAmounts[0].amount * betAmounts[0].bet.decimalOdds) / betAmounts[0].bet.ev) *
+        (analyses[i].ev / analyses[i].decimalOdds),
+    });
+  }
+  let total = 0;
+  betAmounts.forEach((bet) => (total += bet.amount));
+  betAmounts.forEach((bet) => (bet.amount *= bankroll / total));
+
   let out: string = '';
-  analyses.forEach((analysis) => {
-    if (!isNaN(analysis.realProb)) {
+  betAmounts.forEach((analysis) => {
+    if (!isNaN(analysis.bet.realProb)) {
       out +=
         [
-          analysis.team,
-          analysis.winTotal,
-          analysis.decimalOdds,
-          analysis.impliedProb,
-          analysis.sportsbook,
-          analysis.realProb,
-          analysis.ev,
+          analysis.bet.team,
+          analysis.bet.winTotal,
+          analysis.bet.decimalOdds,
+          analysis.bet.impliedProb,
+          analysis.bet.sportsbook,
+          analysis.bet.realProb,
+          analysis.bet.ev,
+          analysis.amount,
+          analysis.amount * analysis.bet.decimalOdds,
         ].join(',') + '\n';
     }
   });
@@ -109,29 +125,46 @@ export function calculateBettingResult(
   seasonSims: SeasonSimulationN,
   bets: ExactWinAnalysis[],
   bankroll: number
-): { bankResults: number[]; betAmountsForWonBets: number[]; betAmountsForLostBets: number[] } {
+): { bankResults: number[]; numBetsWon: number[]; betAmountsForWonBets: number[]; betAmountsForLostBets: number[] } {
   let totalProb = 0;
   bets.forEach((bet) => (totalProb += bet.realProb));
   let betAmounts: { bet: ExactWinAnalysis; amount: number }[] = [];
-  bets.forEach((bet) => betAmounts.push({ bet, amount: (bet.realProb * bankroll) / totalProb }));
+  betAmounts.push({ bet: bets[0], amount: 5 });
+  for (let i = 1; i < bets.length; i++) {
+    betAmounts.push({
+      bet: bets[i],
+      amount: ((betAmounts[0].amount * betAmounts[0].bet.decimalOdds) / betAmounts[0].bet.ev) * bets[i].ev,
+    });
+  }
+  let total = 0;
+  betAmounts.forEach((bet) => (total += bet.amount));
+  betAmounts.forEach((bet) => (bet.amount *= bankroll / total));
 
-  let results: number[] = [];
+  let bankResults: number[] = [];
+  let numBetsWon: number[] = [];
   let betAmountsForWonBets: number[] = [];
   let betAmountsForLostBets: number[] = [];
   let simCount = seasonSims[Object.keys(seasonSims)[0]].length;
   for (let simNum = 0; simNum < simCount; simNum++) {
     let bank = 0;
+    let wonBets = 0;
     let odds: number[] = [];
     betAmounts.forEach((bet) => {
-      if (seasonSims[bet.bet.team][simNum] == bet.bet.winTotal) bank += bet.amount * bet.bet.decimalOdds;
-      if (seasonSims[bet.bet.team][simNum] == bet.bet.winTotal) betAmountsForWonBets.push(bet.amount);
-      if (seasonSims[bet.bet.team][simNum] != bet.bet.winTotal) betAmountsForLostBets.push(bet.amount);
+      if (seasonSims[bet.bet.team][simNum] == bet.bet.winTotal) {
+        bank += bet.amount * bet.bet.decimalOdds;
+        wonBets += 1;
+        betAmountsForWonBets.push(bet.amount);
+      } else {
+        betAmountsForLostBets.push(bet.amount);
+      }
     });
-    results.push(bank);
+    bankResults.push(bank);
+    numBetsWon.push(wonBets);
   }
 
   return {
-    bankResults: results,
+    bankResults: bankResults,
+    numBetsWon,
     betAmountsForWonBets,
     betAmountsForLostBets,
   };
