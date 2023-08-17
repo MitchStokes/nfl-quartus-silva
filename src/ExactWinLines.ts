@@ -89,16 +89,18 @@ export function getExactWinAnalyses(
 export function exactWinAnalysesToCsv(analyses: ExactWinAnalysis[]): string {
   let out: string = '';
   analyses.forEach((analysis) => {
-    out +=
-      [
-        analysis.team,
-        analysis.winTotal,
-        analysis.decimalOdds,
-        analysis.impliedProb,
-        analysis.sportsbook,
-        analysis.realProb,
-        analysis.ev,
-      ].join(',') + '\n';
+    if (!isNaN(analysis.realProb)) {
+      out +=
+        [
+          analysis.team,
+          analysis.winTotal,
+          analysis.decimalOdds,
+          analysis.impliedProb,
+          analysis.sportsbook,
+          analysis.realProb,
+          analysis.ev,
+        ].join(',') + '\n';
+    }
   });
   return out;
 }
@@ -107,22 +109,30 @@ export function calculateBettingResult(
   seasonSims: SeasonSimulationN,
   bets: ExactWinAnalysis[],
   bankroll: number
-): number[] {
-  let totalEv = 0;
-  bets.forEach((bet) => (totalEv += bet.ev));
+): { bankResults: number[]; betAmountsForWonBets: number[]; betAmountsForLostBets: number[] } {
+  let totalProb = 0;
+  bets.forEach((bet) => (totalProb += bet.realProb));
   let betAmounts: { bet: ExactWinAnalysis; amount: number }[] = [];
-  bets.forEach((bet) => betAmounts.push({ bet, amount: (bet.ev * bankroll) / totalEv }));
+  bets.forEach((bet) => betAmounts.push({ bet, amount: (bet.realProb * bankroll) / totalProb }));
 
   let results: number[] = [];
+  let betAmountsForWonBets: number[] = [];
+  let betAmountsForLostBets: number[] = [];
   let simCount = seasonSims[Object.keys(seasonSims)[0]].length;
   for (let simNum = 0; simNum < simCount; simNum++) {
     let bank = 0;
     let odds: number[] = [];
     betAmounts.forEach((bet) => {
       if (seasonSims[bet.bet.team][simNum] == bet.bet.winTotal) bank += bet.amount * bet.bet.decimalOdds;
+      if (seasonSims[bet.bet.team][simNum] == bet.bet.winTotal) betAmountsForWonBets.push(bet.amount);
+      if (seasonSims[bet.bet.team][simNum] != bet.bet.winTotal) betAmountsForLostBets.push(bet.amount);
     });
     results.push(bank);
   }
 
-  return results;
+  return {
+    bankResults: results,
+    betAmountsForWonBets,
+    betAmountsForLostBets,
+  };
 }

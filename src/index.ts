@@ -67,17 +67,31 @@ writeFileSync('test.csv', out);
 */
 
 const gameLines = parseGameLines();
+const totalWinLines = parseTotalWinLines();
 const dkExactWinLines = parseExactWinLines();
 const fanduelExactWinLines = parseFanduelExactWinLines();
 const bestExactWinLines = compileBestExactWinLines(dkExactWinLines, fanduelExactWinLines);
 
-const chanceOfWinTotal = getChanceOfWinTotalPerTeam(gameLines);
+const manySims = simulateSeasonWithEvolvingOddsNTimes(gameLines, totalWinLines, 50000);
+const chanceOfWinTotal = getChanceOfWinTotalPerTeam(manySims);
 const exactWinAnalyses = getExactWinAnalyses(chanceOfWinTotal, bestExactWinLines);
 const positiveEVBets = exactWinAnalyses.filter((bet) => bet.ev > 0);
-const manySims = simulateSeasonNTimes(gameLines, 100000);
 const bankResults = calculateBettingResult(manySims, positiveEVBets, 1000);
 
+/*
+let sum = 0;
+bankResults.betAmountsForWonBets.forEach((wonBet) => (sum += wonBet));
+console.log(sum / bankResults.betAmountsForWonBets.length);
+sum = 0;
+bankResults.betAmountsForLostBets.forEach((wonBet) => (sum += wonBet));
+console.log(sum / bankResults.betAmountsForLostBets.length);
+
+  Average won bet amount = 0.0078
+  Average lost bet amount = 0.0075
+  Average won bet mult = 7.68
+*/
+
 let out: string = '';
-bankResults.forEach((result) => (out += result + '\n'));
+bankResults.bankResults.forEach((result) => (out += result + '\n'));
 writeFileSync('./results/exactWinResults.csv', out);
 writeFileSync('./results/exactWinBets.csv', exactWinAnalysesToCsv(exactWinAnalyses));

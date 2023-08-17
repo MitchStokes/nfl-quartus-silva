@@ -60,26 +60,30 @@ exports.getExactWinAnalyses = getExactWinAnalyses;
 function exactWinAnalysesToCsv(analyses) {
     let out = '';
     analyses.forEach((analysis) => {
-        out +=
-            [
-                analysis.team,
-                analysis.winTotal,
-                analysis.decimalOdds,
-                analysis.impliedProb,
-                analysis.sportsbook,
-                analysis.realProb,
-                analysis.ev,
-            ].join(',') + '\n';
+        if (!isNaN(analysis.realProb)) {
+            out +=
+                [
+                    analysis.team,
+                    analysis.winTotal,
+                    analysis.decimalOdds,
+                    analysis.impliedProb,
+                    analysis.sportsbook,
+                    analysis.realProb,
+                    analysis.ev,
+                ].join(',') + '\n';
+        }
     });
     return out;
 }
 exports.exactWinAnalysesToCsv = exactWinAnalysesToCsv;
 function calculateBettingResult(seasonSims, bets, bankroll) {
-    let totalEv = 0;
-    bets.forEach((bet) => (totalEv += bet.ev));
+    let totalProb = 0;
+    bets.forEach((bet) => (totalProb += bet.realProb));
     let betAmounts = [];
-    bets.forEach((bet) => betAmounts.push({ bet, amount: (bet.ev * bankroll) / totalEv }));
+    bets.forEach((bet) => betAmounts.push({ bet, amount: (bet.realProb * bankroll) / totalProb }));
     let results = [];
+    let betAmountsForWonBets = [];
+    let betAmountsForLostBets = [];
     let simCount = seasonSims[Object.keys(seasonSims)[0]].length;
     for (let simNum = 0; simNum < simCount; simNum++) {
         let bank = 0;
@@ -87,9 +91,17 @@ function calculateBettingResult(seasonSims, bets, bankroll) {
         betAmounts.forEach((bet) => {
             if (seasonSims[bet.bet.team][simNum] == bet.bet.winTotal)
                 bank += bet.amount * bet.bet.decimalOdds;
+            if (seasonSims[bet.bet.team][simNum] == bet.bet.winTotal)
+                betAmountsForWonBets.push(bet.bet.decimalOdds);
+            if (seasonSims[bet.bet.team][simNum] != bet.bet.winTotal)
+                betAmountsForLostBets.push(bet.bet.decimalOdds);
         });
         results.push(bank);
     }
-    return results;
+    return {
+        bankResults: results,
+        betAmountsForWonBets,
+        betAmountsForLostBets,
+    };
 }
 exports.calculateBettingResult = calculateBettingResult;

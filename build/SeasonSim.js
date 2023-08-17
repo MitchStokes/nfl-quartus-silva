@@ -94,7 +94,7 @@ function simulateSeasonWithEvolvingOdds(gameLines, totalWinLines) {
         // console.log(`${game.team2} rating-adjusted win prob: ${1 - team1NormedProb}`);
         numWins[game.team1].evolvedOdds.push(team1NormedProb);
         numWins[game.team2].evolvedOdds.push(1 - team1NormedProb);
-        const k = 0.3;
+        const k = 0.1;
         if (Math.random() <= team1NormedProb) {
             // Team 1 won
             // console.log(`${game.team1} won`);
@@ -164,37 +164,20 @@ function getNumberOfWinsInCombo(winLoss) {
     }
     return wins;
 }
-function getChanceOfWinTotalPerTeam(gameLines) {
-    function getAdjustedOdds(winOdds, lossOdds) {
-        return {
-            win: (winOdds + lossOdds) / lossOdds,
-            loss: (winOdds + lossOdds) / winOdds,
-        };
-    }
-    let allTeamNames = [];
-    gameLines.forEach((game) => {
-        if (!allTeamNames.includes(game.team1))
-            allTeamNames.push(game.team1);
-        if (!allTeamNames.includes(game.team2))
-            allTeamNames.push(game.team2);
-    });
-    const allCombos = generateEveryWinLossCombo();
+function getChanceOfWinTotalPerTeam(seasonSimN) {
     let out = {};
-    allTeamNames.forEach((teamName) => {
+    Object.keys(seasonSimN).forEach((teamName) => {
+        let numGames = seasonSimN[teamName].length;
         out[teamName] = {};
-        const relevantGames = gameLines.filter((game) => game.team1 == teamName || game.team2 == teamName);
-        allCombos.forEach((combo) => {
-            const winCount = getNumberOfWinsInCombo(combo);
-            let implOdds = 1;
-            for (let i = 0; i < 17; i++) {
-                const winOdds = relevantGames[i].team1 == teamName ? relevantGames[i].team1OddsDecimal : relevantGames[i].team2OddsDecimal;
-                const lossOdds = relevantGames[i].team1 == teamName ? relevantGames[i].team2OddsDecimal : relevantGames[i].team1OddsDecimal;
-                implOdds *= didWinIthGame(combo, i)
-                    ? getAdjustedOdds(winOdds, lossOdds).win
-                    : getAdjustedOdds(winOdds, lossOdds).loss;
-            }
-            out[teamName][winCount] = (out[teamName][winCount] || 0) + 1 / implOdds;
+        for (let i = 0; i < 17; i++) {
+            out[teamName][i] = 0;
+        }
+        seasonSimN[teamName].forEach((outcome) => {
+            out[teamName][outcome]++;
         });
+        for (let i = 0; i < 17; i++) {
+            out[teamName][i] /= numGames;
+        }
     });
     return out;
 }
